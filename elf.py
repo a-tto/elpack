@@ -1,4 +1,5 @@
 import struct
+import sys
 
 class Ehdr():
     fmt = '<16B2HI3QI6H'
@@ -49,7 +50,7 @@ class Phdr():
         self.p_align    = p_align
 
     def dump(self):
-        print("-----------program headers----------------")
+        print("-----------program header----------------")
         print(' p_type   {}'.format( self.p_type  ))
         print(' p_flags  {}'.format( self.p_flags ))
         print(' p_offset {}'.format( self.p_offset))
@@ -74,7 +75,7 @@ class Shdr():
         self.sh_entsize     = sh_entsize
 
     def dump(self):
-        print("-----------section headers----------------")
+        print("-----------section header----------------")
         print(" sh_name     {}".format( self.sh_name     ))
         print(" sh_type     {}".format( self.sh_type     ))
         print(" sh_flags    {}".format( self.sh_flags    ))
@@ -182,10 +183,12 @@ class Elf():
 
 
 if __name__ == '__main__':
-    path = '/home/vagrant/elpack/a.out'
+    path = sys.argv[1]
     elf = Elf()
 
     elf.read_file(path)
     elf.elf_header.dump()
+    for phdr in elf.program_headers:
+        phdr.dump()
     for shdr in elf.section_headers:
         shdr.dump()
