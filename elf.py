@@ -48,6 +48,17 @@ class Phdr():
         self.p_memsz    = p_memsz
         self.p_align    = p_align
 
+    def dump(self):
+        print("-----------program headers----------------")
+        print(' p_type   {}'.format( self.p_type  ))
+        print(' p_flags  {}'.format( self.p_flags ))
+        print(' p_offset {}'.format( self.p_offset))
+        print(' p_vaddr  {}'.format( self.p_vaddr ))
+        print(' p_paddr  {}'.format( self.p_paddr ))
+        print(' p_filesz {}'.format( self.p_filesz))
+        print(' p_memsz  {}'.format( self.p_memsz ))
+        print(' p_align  {}'.format( self.p_align ))
+
 class Shdr():
     fmt = '<IIQQQQIIQQ'
     def __init__(self, sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize):
