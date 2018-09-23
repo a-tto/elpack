@@ -19,6 +19,27 @@ class Ehdr():
         self.e_shnum        = e_shnum
         self.e_shstrndx     = e_shstrndx
 
+    def get_raw_header(self):
+        buf = b''
+        for byte in self.e_ident:
+            buf += struct.pack('B', byte)
+
+        buf +=  struct.pack('H', self.e_type     )
+        buf +=  struct.pack('H', self.e_machine  )
+        buf +=  struct.pack('I', self.e_version  )
+        buf +=  struct.pack('Q', self.e_entry    )
+        buf +=  struct.pack('Q', self.e_phoff    )
+        buf +=  struct.pack('Q', self.e_shoff    )
+        buf +=  struct.pack('I', self.e_flags    )
+        buf +=  struct.pack('H', self.e_ehsize   )
+        buf +=  struct.pack('H', self.e_phentsize)
+        buf +=  struct.pack('H', self.e_phnum    )
+        buf +=  struct.pack('H', self.e_shentsize)
+        buf +=  struct.pack('H', self.e_shnum    )
+        buf +=  struct.pack('H', self.e_shstrndx )
+
+        return buf
+
     def dump(self):
         print('-------elf header-----------')
         print(' e_ident    {}'.format(self.e_ident))    
@@ -48,6 +69,20 @@ class Phdr():
         self.p_filesz   = p_filesz
         self.p_memsz    = p_memsz
         self.p_align    = p_align
+    
+    def get_raw_header(self):
+        buf = b''
+
+        buf += struct.pack('I', self.p_type  )
+        buf += struct.pack('I', self.p_flags )
+        buf += struct.pack('Q', self.p_offset)
+        buf += struct.pack('Q', self.p_vaddr )
+        buf += struct.pack('Q', self.p_paddr )
+        buf += struct.pack('Q', self.p_filesz)
+        buf += struct.pack('Q', self.p_memsz )
+        buf += struct.pack('Q', self.p_align )
+
+        return buf
 
     def dump(self):
         print("-----------program header----------------")
@@ -62,7 +97,8 @@ class Phdr():
 
 class Shdr():
     fmt = '<IIQQQQIIQQ'
-    def __init__(self, sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize):
+    def __init__(self, sh_name_raw, sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize):
+        self.sh_name_raw    = sh_name_raw
         self.sh_name        = sh_name
         self.sh_type        = sh_type
         self.sh_flags       = sh_flags
@@ -73,6 +109,21 @@ class Shdr():
         self.sh_info        = sh_info
         self.sh_addralign   = sh_addralign
         self.sh_entsize     = sh_entsize
+
+    def get_raw_header(self):
+        buf = b''
+        buf += struct.pack('I', self.sh_name_raw)
+        buf += struct.pack('I', self.sh_type     )
+        buf += struct.pack('Q', self.sh_flags    )
+        buf += struct.pack('Q', self.sh_addr     )
+        buf += struct.pack('Q', self.sh_offset   )
+        buf += struct.pack('Q', self.sh_size     )
+        buf += struct.pack('I', self.sh_link     )
+        buf += struct.pack('I', self.sh_info     )
+        buf += struct.pack('Q', self.sh_addralign)
+        buf += struct.pack('Q', self.sh_entsize  )
+
+        return buf
 
     def dump(self):
         print("-----------section header----------------")
@@ -91,6 +142,7 @@ class Elf():
     def __init__(self):
         self.section_headers = []
         self.program_headers = []
+        self.sections = []
     
     def read_file(self, path):
         with open(path, 'rb') as f:
@@ -99,9 +151,28 @@ class Elf():
         self.elf_header = self.get_elf_header(elf_file)
         self.program_headers = self.get_program_headers(elf_file)
         self.section_headers = self.get_section_headers(elf_file)
+        self.get_sections(elf_file)
 
-    def write(self, path):
-        pass
+    def write_file(self, path):
+        f = open(path, 'wb')
+        buf = self.elf_header.get_raw_header()
+        f.write(buf)
+
+        f.seek(self.elf_header.e_phoff)
+        for phdr in self.program_headers:
+            p = phdr.get_raw_header()
+            f.write(p)
+        
+        for data,shdr in zip(self.sections, self.section_headers):
+            f.seek(shdr.sh_offset)
+            f.write(data)
+
+        f.seek(self.elf_header.e_shoff)
+        for shdr in self.section_headers:
+            s = shdr.get_raw_header()
+            f.write(s)
+
+        f.close()
     
     def add_section(self):
         pass
@@ -110,7 +181,19 @@ class Elf():
         pass
 
     def dump_headers(self):
-        pass
+        self.elf_header.dump()
+        print()
+        print()
+        print()
+        print()
+        for phdr in elf.program_headers:
+            phdr.dump()
+        print()
+        print()
+        print()
+        print()
+        for shdr in elf.section_headers:
+            shdr.dump()
 
     def get_elf_header(self, elf_file):
         raw_ehdr = list(struct.unpack_from(Ehdr.fmt, elf_file, 0))
@@ -136,6 +219,7 @@ class Elf():
         phdrs = []
         for i in range(self.elf_header.e_phnum):
             raw_phdr = struct.unpack_from(Phdr.fmt, elf_file, self.elf_header.e_phoff+(i * self.elf_header.e_phentsize))
+
             p_type     = raw_phdr[0]
             p_flags    = raw_phdr[1]
             p_offset   = raw_phdr[2]
@@ -144,6 +228,7 @@ class Elf():
             p_filesz   = raw_phdr[5]
             p_memsz    = raw_phdr[6]
             p_align    = raw_phdr[7]
+
             phdrs.append(Phdr(p_type, p_flags, p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align))
         
         return phdrs
@@ -156,6 +241,7 @@ class Elf():
             raw_shdr = struct.unpack_from(Shdr.fmt, elf_file, self.elf_header.e_shoff+(i * self.elf_header.e_shentsize))
             
             shdr_names_index.append(raw_shdr[0])
+            sh_name_raw    = raw_shdr[0]
             sh_name        = ''
             sh_type        = raw_shdr[1]
             sh_flags       = raw_shdr[2]
@@ -167,7 +253,7 @@ class Elf():
             sh_addralign   = raw_shdr[8]
             sh_entsize     = raw_shdr[9]
 
-            shdrs.append(Shdr(sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize))
+            shdrs.append(Shdr(sh_name_raw, sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize))
 
         str_table_section_offset = shdrs[self.elf_header.e_shstrndx].sh_offset
         sh_name_bin = elf_file[str_table_section_offset : str_table_section_offset + shdrs[self.elf_header.e_shstrndx].sh_size]
@@ -180,15 +266,16 @@ class Elf():
             shdrs[i].sh_name = sh_name_str
 
         return shdrs
+    
+    def get_sections(self,elf_file):
+        for shdr in self.section_headers:
+            raw_section = bytes(struct.unpack_from('B' * shdr.sh_size, elf_file, shdr.sh_offset))
+            self.sections.append(raw_section)
 
 
 if __name__ == '__main__':
     path = sys.argv[1]
     elf = Elf()
-
     elf.read_file(path)
-    elf.elf_header.dump()
-    for phdr in elf.program_headers:
-        phdr.dump()
-    for shdr in elf.section_headers:
-        shdr.dump()
+    
+    elf.write_file('b.out')
