@@ -130,7 +130,7 @@ class Shdr():
         print(" sh_name     {}".format( self.sh_name     ))
         print(" sh_type     {}".format( self.sh_type     ))
         print(" sh_flags    {}".format( self.sh_flags    ))
-        print(" sh_addr     {}".format( self.sh_addr     ))
+        print(" sh_addr     {}".format( hex(self.sh_addr)     ))
         print(" sh_offset   {}".format( self.sh_offset   ))
         print(" sh_size     {}".format( self.sh_size     ))
         print(" sh_link     {}".format( self.sh_link     ))
@@ -163,19 +163,47 @@ class Elf():
             p = phdr.get_raw_header()
             f.write(p)
         
-        for data,shdr in zip(self.sections, self.section_headers):
-            f.seek(shdr.sh_offset)
-            f.write(data)
-
         f.seek(self.elf_header.e_shoff)
         for shdr in self.section_headers:
             s = shdr.get_raw_header()
             f.write(s)
-
+        
+        for data,shdr in zip(self.sections, self.section_headers):
+            f.seek(shdr.sh_offset)
+            f.write(data)
+        
         f.close()
     
-    def add_section(self):
-        pass
+    def add_section(self, data, name):
+        self.elf_header.e_shnum += 1
+        self.sections.append(data)
+        # 値を設定できるようにする
+        sh_type     = 1
+        sh_flags    = 6
+        sh_offset   = self.elf_header.e_shoff
+        sh_addr     = 0x400000 + sh_offset
+        sh_size     = len(data)
+        sh_link     = 0
+        sh_info     = 0
+        sh_addralign = 0
+        sh_entsize  = 0 
+
+        self.section_headers.append(Shdr(self.section_headers[self.elf_header.e_shstrndx].sh_size, name, sh_type, sh_flags, sh_addr, sh_offset, sh_size, sh_link, sh_info, sh_addralign, sh_entsize))
+
+        self.elf_header.e_shoff += sh_size
+
+        # change the name
+        self.sections[self.elf_header.e_shstrndx] += name.encode() + b'\0'
+        self.section_headers[self.elf_header.e_shstrndx].sh_size += len(name)
+        #self.section_headers[self.elf_header.e_shstrndx].sh_offset += len(name)
+        for shdr in self.section_headers:
+            if shdr.sh_offset > self.section_headers[self.elf_header.e_shstrndx].sh_offset:
+                if shdr.sh_addr != 0:
+                    shdr.sh_addr += len(name)
+                shdr.sh_offset += len(name)
+
+        self.elf_header.e_shoff += len(name)
+
 
     def delete_section(self):
         pass
@@ -278,4 +306,6 @@ if __name__ == '__main__':
     elf = Elf()
     elf.read_file(path)
     
+    elf.add_section(b'AAAA', '.hoge')
     elf.write_file('b.out')
+    #elf.dump_headers()
